@@ -1,4 +1,4 @@
 # PuroSwing-Pendule
-Módulo pendulé de la exposición puro Swing
+Este repositorio está ahora en
 
-Actualizado para el nuevo motor de más potencia
+https://github.com/mc2-coruna/PuroSwing-Pendule
