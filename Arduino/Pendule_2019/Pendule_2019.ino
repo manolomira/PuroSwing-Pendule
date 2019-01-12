@@ -63,57 +63,53 @@ Bounce SWInnerBounce = Bounce( SWInner,50 ); // Referencia del pendulo
 Bounce FinImanBounce = Bounce( FinIman,50 ); // Cerca del electroiman
 
 long milliseconds;
-long tiempoActual;          // OBSOLETA
-long tiempoAnterior;          // OBSOLETA
-long tiempoOn;          // OBSOLETA
-long tiempoOff;          // OBSOLETA
+long tiempoActual;            // OBSOLETA ¿en uso?
+long tiempoAnterior;          // OBSOLETA ¿en uso?
+long tiempoOn;                // OBSOLETA ¿en uso?
+long tiempoOff;               // OBSOLETA ¿en uso?
   
 int periodoPendulo;
-int intervaloActual;     // OBSOLETA
-int intervaloAnterior;    // OBSOLETA
-int extraTon;              // OBSOLETA            // tiempo extra calculado a partir del potenciometro
+int intervaloActual;          // OBSOLETA ¿en uso?
+int intervaloAnterior;        // OBSOLETA ¿en uso?
+int extraTon;                 // OBSOLETA ¿en uso?   // tiempo extra calculado a partir del potenciometro
 
 unsigned long T_Pendulo;
 
+
 // *************** VARIABLES DE LA RUEDA ***************
-
-
-const int minimoPWM  = 100;           // Valor minimo de salida del PWM al motor
-const int maximoPWM  = 255;
+  const int minimoPWM  = 100;           // Valor minimo de salida del PWM al motor
+  const int maximoPWM  = 255;           // Valor máximo de salida del PWM al motor
 
 // Define entradas y salidas
-const int int_rueda   =  8;    // Entrada del pulso de la rueda (periodo a regular)
-
-const int out_motor1  = 10;    // Salida PWM de control de la velocidad de la rueda
+  const int int_rueda   =  8;    // Entrada del pulso de la rueda (periodo a regular)
+  const int out_motor1  = 10;    // Salida PWM de control de la velocidad de la rueda
 
 //  Inicializacion de INSTANCIAS
-
-Bounce SWRuedaBounce = Bounce( int_rueda,250 ); 
-
-boolean periodoRuedaEnclavado = false; // indica que el periodo esta enclavado
-int contadorRueda = 10;                // vueltas de la rueda antes de iniciar el ajuste de velocidad
-
-float gananciaNoEnclavado = 0.13;
-float gananciaEnclavado   = 0.05;
+  Bounce SWRuedaBounce = Bounce( int_rueda,250 ); 
 
 
-int salidaMotorEnclavado;
-int inicioContadorEnclavado;
-int  periodoRueda;
-long tiempoRuedaAnt;
-long tiempoRuedaAct;
+  boolean periodoRuedaEnclavado = false;   // indica que el periodo esta enclavado
+  int contadorRueda = 10;                  // vueltas de la rueda antes de iniciar el ajuste de velocidad
 
-int salidaPWMRueda;
+  int salidaMotorEnclavado;
+  int inicioContadorEnclavado;
+  int  periodoRueda;
+  int salidaPWMRueda;
+  int deltasMotor[]  = {20, 20, 20, 20, 20};
+  int salidasMotor[] = {20, 20, 20, 20, 20};
+  int extraDesfase;
+  float gananciaNoEnclavado = 0.13;         // Valor para calcular la velocidad proporcional a la diferencia de períodos
+  float gananciaEnclavado   = 0.05;
+  long tiempoRuedaAnt;
+  long tiempoRuedaAct;
 
-int deltasMotor[]  = {20, 20, 20, 20, 20};
-int salidasMotor[] = {20, 20, 20, 20, 20};
-
-int extraDesfase;
 
 
 void setup()
 {
-// *************** VARIABLES DEL PENDULO ***************
+  Serial.begin(9600);   
+
+// *************** SEÑALES DEL PENDULO ***************
   pinMode(SWInner, INPUT);        // optoacoplador de llegada al REED
   pinMode(FinIman,INPUT);         // optoacoplador de llegada al electroiman
 
@@ -123,89 +119,80 @@ void setup()
   pinMode(LED_Enclavado, OUTPUT); // Salida que indica modo enclavado (L1)
   
 
-  // *************** VARIABLES DE LA RUEDA ***************
+// *************** SEÑALES DE LA RUEDA ***************
   pinMode(int_rueda,   INPUT);    // Sensor del giro de la rueda
-
   pinMode(out_motor1, OUTPUT);    // Salida al motor por PWm
-   
-  salidaPWMRueda = (minimoPWM + maximoPWM) / 2;
 
+
+  salidaPWMRueda = (minimoPWM + maximoPWM) / 2;    // Toma como velocidad inicial la media entre máxima y minima
   milliseconds = millis();
 
   // Señaliza el estado enclavado por medio del LED L1
-  if (periodoRuedaEnclavado == true)  {digitalWrite (LED_Enclavado, HIGH);}
-  else  {digitalWrite (LED_Enclavado, LOW);}
-  
-  Serial.begin(9600);   
+    if (periodoRuedaEnclavado == true)  {digitalWrite (LED_Enclavado, HIGH);}
+    else  {digitalWrite (LED_Enclavado, LOW);}
 }
 
 
-//  ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** **********  
+//  ********** ********** ********** LOOOP ********** ********** ********** 
 void loop()
 {
-   
-  // *************** GESTION DEL PENDULO ***************
+  // ********** GESTION DEL PENDULO **********
+  // Actualiza las instalacias Bounce del pendulo y detecta flancos de bajada.
+    SWInnerBounce.update ();
+    FinImanBounce.update (); 
 
-  
-  SWInnerBounce.update ();       // Actualiza las instalacias Bounce del pendulo y detecta flancos de bajada.
-  FinImanBounce.update (); 
-
-  ActualizaPendulo();            // Actualiza las variables asociadas al pendulo y enciende sus actuadores
-
-  
+  // Actualiza las variables asociadas al pendulo y enciende sus actuadores
+    ActualizaPendulo();
 
 
+  /*****************************************
+   ********** GESTION DE LA RUEDA **********
+   *****************************************/
+  // Actualiza las instalacias Bounce del detector del giro de la rueda.
+    SWRuedaBounce.update ();
+  // Detecta flancos de bajada en el detector.
+    boolean pulsoRueda = SWRuedaBounce.fallingEdge();
 
-  // *************** GESTION DE LA RUEDA ***************
-
-  SWRuedaBounce.update ();                               // Actualiza las instalacias Bounce del detector del giro de la rueda.
-  boolean pulsoRueda = SWRuedaBounce.fallingEdge();      // Detecta flancos de bajada en el detector.
-  
-  if (pulsoRueda == true)                                // Si se produce un peso por el sensor ctualiza variables
-  {
-    contadorRueda ++;
-
-    tiempoRuedaAnt = tiempoRuedaAct;
-    tiempoRuedaAct = millis ();
+  // Si se produce un peso por el sensor de giro de la rueda actualiza el valor de la velocidad del motor
+    if (pulsoRueda == true)                                
+    {
+      contadorRueda ++;
+      tiempoRuedaAnt = tiempoRuedaAct;
+      tiempoRuedaAct = millis ();
     
-    periodoRueda = tiempoRuedaAct - tiempoRuedaAnt;              // Calcula el periodo de la rueda
+      periodoRueda = tiempoRuedaAct - tiempoRuedaAnt;              // Calcula el periodo de la rueda
     
     
     // Ajusta la salida del motor
-    
-                                                                 // Ajuste cuando el periodo de la rueda y el del pendulo son distintos.
-                                                                 // La salida PWM se incrementa con un valor proporcional a la 
-                                                                 //       diferencia de periodos
-                                                                 // Al salir de este modo se establece el valor de salidaMotorEnclavado
-    if (periodoRuedaEnclavado == false) 
-    salidaPWMRueda = calculo_salida_no_enclavado(salidaPWMRueda);
+      /* Ajuste cuando el lazo no está enclavado: el periodo de la rueda y el del pendulo son distintos. 
+              La salida PWM se incrementa con un valor proporcional a la diferencia de periodos entre rueda y péndulo.
+              Al salir de este modo se establece el valor de salidaMotorEnclavado */
+      if (periodoRuedaEnclavado == false) 
+      salidaPWMRueda = calculo_salida_no_enclavado(salidaPWMRueda);
 
-    
-                                                                  // Ajuste cunado el periodo de la rueda y el del pendulo SON iguales
-                                                                  // La salida PWM se calcula como salidaMotorEnclavado + un valor proporcional
-                                                                  //        a la diferencia entre el momento en el que se producen los 
-                                                                  //        pulsos de control
-    else
-    salidaPWMRueda = calculo_salida_enclavado();
-  }
-  
-  if (salidaPWMRueda < minimoPWM) salidaPWMRueda = minimoPWM;
-  if (salidaPWMRueda > maximoPWM) salidaPWMRueda = maximoPWM;
+      /* Ajuste cuando está enclavado: el periodo de la rueda y el del pendulo SON iguales
+              Para lograr que ambos se muevan a la vez, la salida PWM se calcula como salidaMotorEnclavado + 
+              un valor proporcional a la diferencia entre el momento en el que se producen los pulsos de control */
+      else
+      salidaPWMRueda = calculo_salida_enclavado();
+    }
+
+  // Mantiene la velocidad del motor dentro de los límites establecidos
+    if (salidaPWMRueda < minimoPWM) salidaPWMRueda = minimoPWM;
+    if (salidaPWMRueda > maximoPWM) salidaPWMRueda = maximoPWM;
 
   analogWrite(out_motor1, salidaPWMRueda);  
 }
-  
-    
-  
- 
-//  ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** **********  
+
+
+/************************************************************************************************
+    ********** ********** ********** CALCULO SALIDA NO ENCLAVADO ********** ********** ********** 
+ ************************************************************************************************/
 int calculo_salida_no_enclavado (int salidaMotorRueda)
 {
-  // Calcula el nuevo valor de la salida PWM que controla el motor
-       // cuando aun la rueda aun no alcanzo la velocidad del pendulo
-  // salidaMotorRueda es el valor actual de la salida PWM
-  // La salida es el nuevo valor para la salida PWM
-  
+  /* Calcula el nuevo valor de la salida PWM que controla el motor cuando aun la rueda aun no alcanzo la velocidad del pendulo
+        salidaMotorRueda es el valor actual de la salida PWM
+        La salida de la función es el nuevo valor para la salida PWM */
   
   int diferenciaPeriodoRueda;
   float deltaSalidaMotor;
@@ -214,57 +201,75 @@ int calculo_salida_no_enclavado (int salidaMotorRueda)
   float salidaMotorMedia = 0.0;
 
   digitalWrite(LED_Enclavado, LOW);
-  
-  diferenciaPeriodoRueda = periodoRueda - periodoPendulo;
-  deltaSalidaMotor = diferenciaPeriodoRueda * gananciaNoEnclavado;
+
+  // Calcula el cambio en la velocidad del motor en función de la diferencia de períodos con un máximo de ±10
+    diferenciaPeriodoRueda = periodoRueda - periodoPendulo;
+    deltaSalidaMotor = diferenciaPeriodoRueda * gananciaNoEnclavado;
       if (deltaSalidaMotor >  15.0) deltaSalidaMotor =  10.0;
       if (deltaSalidaMotor < -15.0) deltaSalidaMotor = -10.0;
 
-  salidaMotorRueda += deltaSalidaMotor;
+    salidaMotorRueda += deltaSalidaMotor;
  
+
+   /* Calcula si el sistema está en condiciones de pasar al modo enclavado con los datos de las 5 última iteraciones
+            - si la media de las variaciones de velocidad es menor que 5
+            - ninguna es mayor o igual que 10
+    */
+    deltaMotorMedia  = 0;
+    deltaMotorMaxim  = 0;
+    salidaMotorMedia = 0;           // el valor medio de los 5 ultimos valores de salidaMotorRueda
       
-      deltaMotorMedia  = 0;                                       // Calcula la media de los 5 ultimos valores de deltaSalidaMotor
-      deltaMotorMaxim  = 0;                                       // el valor maximo de los 5 ultimos valores de deltaSalidaMotor
-      salidaMotorMedia = 0;                                       // el valor medio de los 5 ultimos valores de salidaMotorRueda
-      for (int i = 0; i < 4; i++)
-      {
-        deltasMotor[i]  =  deltasMotor [i+1];
-        deltaMotorMedia += deltasMotor[i];
+      // Desplaza los valores a modo de buffer circular y añade el último
+        for (int i = 0; i < 4; i++)
+        {
+          deltasMotor[i]  =  deltasMotor [i+1];
+          salidasMotor[i]  =  salidasMotor [i+1];
+        }
+        deltasMotor[4]  = deltaSalidaMotor;
+        salidasMotor[4]  =  salidaMotorRueda;
+
+      // Calcula las medias y los máximos
+        for (int i = 0; i < 5; i++)
+        {  
+          deltaMotorMedia += deltasMotor[i];
+          deltaMotorMaxim = max(deltaMotorMaxim , abs(deltasMotor[i]));
         
-        deltaMotorMaxim = max(deltaMotorMaxim , abs(deltasMotor[i]));
-        
-        salidasMotor[i]  =  salidasMotor [i+1];
-        salidaMotorMedia += salidasMotor[i];
-        
-      }
-      deltasMotor[4]  = deltaSalidaMotor;
-      deltaMotorMedia += deltasMotor[4];
-      deltaMotorMedia /= 5.0;
- 
-      deltaMotorMaxim = max(deltaMotorMaxim , abs(deltasMotor[4]));
+          salidaMotorMedia += salidasMotor[i];        
+        }
+        deltaMotorMedia /= 5.0;
+        salidaMotorMedia /= 5.0;
       
-      salidasMotor[4]  =  salidaMotorRueda;
-      salidaMotorMedia += salidasMotor[4];
-      salidaMotorMedia /= 5.0;
-      
-                                                                   // Se inicia el modo enclavado si la media de las desviaciones 
-                                                                   //         es menor que 5 y ninguna es de mas de 10
-      if (abs(deltaMotorMedia < 5.0) && (deltaMotorMaxim < 10))
+    // Se inicia el modo enclavado si la media de las desviaciones es menor que 5 y ninguna es de mayor o igual que 10
+      if ((abs(deltaMotorMedia) < 5.0) && (deltaMotorMaxim <= 10))
       {
         salidaMotorEnclavado = salidaMotorMedia;
         periodoRuedaEnclavado = true;
         inicioContadorEnclavado = contadorRueda;
       }
+
   
+  /*****************************************
+   ********** IMPRIME LOS RESULTADOS *******
+   *****************************************/
       Serial.print ("\t          NO ENCLAVADO. PeriodoRueda = ");
       Serial.print (periodoRueda);
       Serial.print ("\tdiferencia =   ");
       Serial.print (diferenciaPeriodoRueda);
       Serial.print ("\t>> salidaPWM = ");
       Serial.print (salidaMotorRueda);
-      Serial.print (" (+");
-      Serial.print (deltaSalidaMotor);
-      Serial.print (")");
+      if (deltaSalidaMotor >= 0) 
+      {
+        Serial.print (" (+");
+        Serial.print (deltaSalidaMotor);
+        Serial.print (")");
+      }
+      else
+      {
+        Serial.print (" (");
+        Serial.print (deltaSalidaMotor);
+        Serial.print (")");
+      }
+      
       Serial.println ();
       Serial.println ();
   
@@ -272,40 +277,39 @@ int calculo_salida_no_enclavado (int salidaMotorRueda)
 }
 
 
-//  ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** **********  
+/*********************************************************************************************
+    ********** ********** ********** CALCULO SALIDA ENCLAVADO ********** ********** ********** 
+ *********************************************************************************************/
 int calculo_salida_enclavado()
 {
-  // Calcula el nuevo valor de la salida PWM que controla el motor
-       // cuando aun la rueda alcanzo la velocidad del pendulo
-  // salidaMotorRueda es el valor actual de la salida PWM
-  // La salida es el nuevo valor para la salida PWM
+  /* Calcula el nuevo valor de la salida PWM que controla el motor cuando la rueda ya alcanzó la velocidad del pendulo
+           salidaMotorRueda es el nuevo valor para la salida PWM */
   
-
   int diferenciaRueda;
   int salidaMotorRueda;
   float deltaSalidaMotor;
   
   digitalWrite(LED_Enclavado, HIGH);
-  
-  extraDesfase = map(analogRead(pot2), 0, 1023, -500, 500);
-  
-     diferenciaRueda = tiempoRuedaAct - T_Pendulo - 300;    
-                       // Calcula el desfase entre la rueda y el pendulo. 
-                       // asume un periodo de 2000 ms, y que el detector de la rueda se activa aproximadamente 
-                       // al paso del pendulo por su posicion central
 
-     if (diferenciaRueda > periodoRueda)     { diferenciaRueda -= periodoRueda;}
-     if (diferenciaRueda > periodoRueda/2)     { diferenciaRueda -= periodoRueda;}
+  /* Calcula el desfase entre la rueda y el pendulo. Asume un periodo de 2000 ms, y que el detector 
+             de la rueda se activa aproximadamente al paso del pendulo por su posicion central 
+             La diferencia de posición se puede controlar con pot2 */
 
-      deltaSalidaMotor = (diferenciaRueda + extraDesfase) * gananciaEnclavado;
-      deltaSalidaMotor = constrain (deltaSalidaMotor, -15, 15);
+    diferenciaRueda = tiempoRuedaAct - T_Pendulo - 300;    
+      if (diferenciaRueda > periodoRueda)   diferenciaRueda -= periodoRueda; // corrige valores si casi hay una vuelta de diferencia
+      if (diferenciaRueda > periodoRueda/2) diferenciaRueda -= periodoRueda; // corrige los valores
+      
+    extraDesfase = map(analogRead(pot2), 0, 1023, -500, 500);
 
+    deltaSalidaMotor = (diferenciaRueda + extraDesfase) * gananciaEnclavado;
+    deltaSalidaMotor = constrain (deltaSalidaMotor, -15, 15);
 
-      if (contadorRueda > inicioContadorEnclavado + 50)            // Sale del modo enclavado tras 20 pasos de ajuste
+    // Sale del modo enclavado tras 50 vueltas para volver a ajustar los períodos hasta que coincidan
+      if (contadorRueda > inicioContadorEnclavado + 50)
       {
         salidaMotorRueda = salidaMotorEnclavado + deltaSalidaMotor;
         periodoRuedaEnclavado = false;
-        deltasMotor[4] = 20;                                      // Fuerza a que se produzcan 5 pasos no enclavados
+        deltasMotor[4] = 20;                                      // ¿?Fuerza a que se produzcan 5 pasos no enclavados
         
       }
       else
@@ -314,18 +318,37 @@ int calculo_salida_enclavado()
       }
  
   
+  /*****************************************
+   ********** IMPRIME LOS RESULTADOS *******
+   *****************************************/
       Serial.print ("**ENCLAVADO**  PerRueda = ");   Serial.print (periodoRueda);
-
       Serial.print ("\tTRueda =   ");                Serial.print (tiempoRuedaAct);
-
       Serial.print ("\tdif. = ");                    Serial.print (diferenciaRueda);
-      if (extraDesfase >= 0) Serial.print (" +");    
-      else Serial.print (" ");                       Serial.print (extraDesfase);
+        if (extraDesfase >= 0) 
+        {
+          Serial.print (" +");
+          Serial.print (extraDesfase);    
+        }
+        else 
+        {
+          Serial.print (" ");
+          Serial.print (extraDesfase);
+        }
 
       Serial.print ("\t >> salidaPWM = ");           Serial.print (salidaMotorEnclavado);
-      
-      if (deltaSalidaMotor >= 0) Serial.print (" (+");
-      else Serial.print (" (");                      Serial.print (deltaSalidaMotor);
+
+        if (deltaSalidaMotor >= 0) 
+        {
+          Serial.print (" (+");
+          Serial.print (deltaSalidaMotor);
+          Serial.print (")");
+        }
+        else 
+        {
+          Serial.print (" (");
+          Serial.print (deltaSalidaMotor);
+          Serial.print (")");
+        }
 
       Serial.print (")");
       Serial.println (); 
@@ -335,7 +358,9 @@ int calculo_salida_enclavado()
 }
 
 
-//  ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** **********  
+/**************************************************************************************
+    ********** ********** ********** ACTUALIZA PENDULO ********** ********** ********** 
+ **************************************************************************************/
 void ActualizaPendulo()
 {
   
@@ -447,113 +472,3 @@ void ActualizaPendulo()
   }
 }
 
-
-
-
-
-//  ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** ********** **********  
-void ActualizaPendulo_antigua()
-{
-
-  int tiempoElectroImnan;
-  boolean pulsoControl = SWInnerBounce.fallingEdge();      // Detecta flancos de bajada en los detectores opticos.
-  boolean pulsoFinIman = FinImanBounce.fallingEdge();
-  boolean pulso_si = false;
-  
-  milliseconds = millis();                                 // Actualiza el contador de tiempo.
-                                                           // Actualiza el ajuste de tiempo extra de encendido de electroiman.
-  extraTon = map(analogRead(pot1), 0, 1023, -10, 50);  if (extraTon < 0) extraTon = 0;
-
-
-  if (pulsoControl == true)                                // Cuando detecta el pulso de control actualiza los tiempos.
-  {
-    tiempoAnterior = tiempoActual;
-    tiempoActual   = milliseconds;
-    
-    intervaloAnterior = intervaloActual;
-    intervaloActual = tiempoActual - tiempoAnterior;
-
-    periodoPendulo = intervaloAnterior + intervaloActual;
-
-    digitalWrite(LEDInner, HIGH);                          // Enciende LEDinner como referencia cuando se activa el sensor 
-
-                                                           // intervaloActual > intervaloAnterior es la condicion 
-                                                           //      cuando el pendulo esta de vuelta por lo que activa
-                                                           //      el electroiman.   
-    if ((intervaloAnterior > 0) && (intervaloActual < intervaloAnterior))   
-    {
-      if (amplitud < amplitud_max)
-      {
-        digitalWrite (ElectMag, HIGH);                       // Conecta el electroiman y LEDElectroMag como control
-        digitalWrite (LEDElectMag, HIGH);
-      }
-      pulso_si = true;
-      tiempoOn = milliseconds;                             // Registra el momento de conexion.   
-      tiempoOff = milliseconds + intervaloSeguridad;       // Inicialmente fija tiempoOff al limite del intervalo de seguridad
-
-      /*
-      Serial.print ("    tAnterior = ");
-      Serial.print (tiempoAnterior);
-      Serial.print ("    tActual = ");
-      Serial.print (tiempoActual);
-            Serial.print ("    tpo = ");
-      Serial.print (intervaloAnterior);
-      Serial.print (" + ");
-      Serial.print (intervaloActual);
-    
-      Serial.println ();
-      Serial.println ();
-      Serial.println ();
-      */
-
-    } 
-    
-
-  }
- 
-                                                            // Apaga LEDInner 15 ms despues de activarlo.
-  if (milliseconds > (tiempoActual + 15))   digitalWrite(LEDInner, LOW);        
-
-
-  if ((pulsoFinIman == true))                               // Registra el paso por el detector de apagado del Electroiman. 
-  {
-    tiempoOff = milliseconds;                               // Establece el valor real para tiempoOff. 
-  }
-                                                            // Apaga el Electroiman pasado  el tiempo de ajuste fino 
-                                                                     // tras la activacion del detector de fin o cuando 
-                                                                     // haya pasado el intervalo de Seguridad
-    tiempoElectroImnan = tiempoOff - tiempoOn;
-    extraTon = tiempoElectroImnan / 6 ;
-     
-  if ((digitalRead (ElectMag) == HIGH) && ((milliseconds > (tiempoOn + intervaloSeguridad)) || (milliseconds > (tiempoOff + extraTon))))
-  {
-      digitalWrite (ElectMag, LOW);                         // Desconecta el electroiman
-      digitalWrite (LEDElectMag, LOW);
-           
-                                                            // Despues imprime los datos del ciclo completado. 
-  }
-      
-  if (pulso_si == true)
-  {  
-      amplitud = 0.0002 * intervaloActual * intervaloActual - 0.1472 * intervaloActual + 49.125;
- 
-      Serial.println("--------------------------------");
-      Serial.print ("|  PerPend = ");     Serial.print (intervaloAnterior);
-      Serial.print (" + ");               Serial.print (intervaloActual);
-      Serial.print (" = ");               Serial.print (periodoPendulo);
-
-      Serial.print ("\tTpendulo = ");     Serial.print (tiempoActual);
-
-      Serial.print ("\tTiman = ");        Serial.print (tiempoOff - tiempoOn);
-      Serial.print (" + ");               Serial.print (extraTon);
-
-      Serial.print ("\t >> amplitud = "); Serial.print (amplitud);
-      Serial.print (" (");                Serial.print (amplitud_max);
-      Serial.print (")");
-      
-      Serial.println();
-      Serial.println("--------------------------------");
-
-      pulso_si = false;      
-  }
-}
